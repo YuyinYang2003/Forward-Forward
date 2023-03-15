@@ -6,48 +6,41 @@ import torch.nn as nn
 from src import utils
 
 
-class FF_model(torch.nn.Module):
+class FF_model_conv(torch.nn.Module):
     """The model trained with Forward-Forward (FF)."""
-    """这里实现的是将原代码中三层全连接层换成三个共享权重的卷积神经网络,没有pooling layer,三层生成的特征图拉长成的向量都成为最后线性分类器的输入"""
+    """这里实现的是将原代码中三层全连接层换成三个共享权重的卷积神经网络,有pooling layer,三层生成的特征图拉长成的向量都成为最后线性分类器的输入"""
     def __init__(self, opt):
-        super(FF_model, self).__init__()
+        super(FF_model_conv, self).__init__()
 
         self.opt = opt
-        #self.num_channels = [128,220,512]
-        #self.num_channels = [128,256,512]
-        self.num_channels=[128,256,512,512]
-        #self.num_strides=[6,1,1]
-        #self.receptions=[10,2,2]
-        #self.num_strides=[7,1,1]
-        #self.receptions=[7,2,2]
-        self.num_strides=[4,1,1,1]
-        self.receptions=[4,3,3,2]
+        self.num_channels = [128,128,256,256,512,512,512,512]
+        self.num_strides=[1,1,1,1,1,1,2,1]
+        self.receptions=[3,3,3,3,3,3,3,2]
+        self.padding=[1,1,1,1,1,1,0,0]
         self.act_fn = ReLU_full_grad()
 
         # Initialize the model.
-        self.model = nn.ModuleList([nn.Conv2d(in_channels=1, out_channels=self.num_channels[0], kernel_size=self.receptions[0],stride=self.num_strides[0])])
+        self.model = nn.ModuleList([nn.Conv2d(in_channels=1, out_channels=self.num_channels[0], kernel_size=self.receptions[0],stride=self.num_strides[0],padding=self.padding[0])])
         for i in range(1, len(self.num_channels)):
-            self.model.append(nn.Conv2d(self.num_channels[i-1], out_channels=self.num_channels[i], kernel_size=self.receptions[i],stride=self.num_strides[i]))
+            self.model.append(nn.Conv2d(self.num_channels[i-1], out_channels=self.num_channels[i], kernel_size=self.receptions[i],stride=self.num_strides[i],padding=self.padding[i]))
+            if i==1 or i==3:
+                self.model.append(nn.MaxPool2d(kernel_size=2))
 
-        #self.dim=[4,3,2]
-        self.dim=[7,5,3,2]
+        self.dim=[28,28,14,14,7,7,3,2]
         # Initialize forward-forward loss.
         self.ff_loss = nn.BCEWithLogitsLoss()
 
         # Initialize peer normalization loss.
         self.running_means = [
             torch.zeros(self.num_channels[i]*(self.dim[i]**2), device=self.opt.device) + 0.5
-            for i in range(self.opt.model.num_layers)
+            for i in range(self.opt.model.num_layers-2)
         ]
 
         # Initialize downstream classification loss.
         # 这里应该是实现原论文中 "one-pass" softmax 的 test 方法.
         channels_for_classification_loss = sum(
-            self.num_channels[-i]*(self.dim[-i]**2) for i in range(self.opt.model.num_layers)
+            self.num_channels[-i]*(self.dim[-i]**2) for i in range(self.opt.model.num_layers-2)
         )
-        #channels_for_classification_loss = sum(
-        #    self.num_channels[-i-1]*(self.dim[-i-1]**2) for i in range(self.opt.model.num_layers-1)
-        #)
         # 下游的线性分类器 并不被包括在 self.model 中, 而是单独列为 self.linear_classifier.
         self.linear_classifier = nn.Sequential(
             nn.Linear(channels_for_classification_loss, 10, bias=False)
@@ -63,7 +56,7 @@ class FF_model(torch.nn.Module):
             if isinstance(m, nn.Conv2d):
                 # 用了正态分布来初始化 weight_matrix, 而没有用 nn.Linear 默认的均匀分布.
                 torch.nn.init.normal_(
-                    m.weight, mean=0, std=1 / math.sqrt(m.weight.shape[0]*(m.weight.shape[1]**2))
+                    m.weight, mean=0, std=1 / math.sqrt(m.weight.shape[0]*m.weight.shape[1]**2)
                 )
                 torch.nn.init.zeros_(m.bias)
 
@@ -133,15 +126,20 @@ class FF_model(torch.nn.Module):
             z = self.act_fn.apply(z)
 
             # 可选项: 是否把 peer loss 这个正则因子加入最终的 Loss 中.
-            if self.opt.model.peer_normalization > 0:
-                peer_loss = self._calc_peer_normalization_loss(idx, z)
-                scalar_outputs["Peer Normalization"] += peer_loss
-                scalar_outputs["Loss"] += self.opt.model.peer_normalization * peer_loss
-
-            ff_loss, ff_accuracy = self._calc_ff_loss(z, posneg_labels)
-            scalar_outputs[f"loss_layer_{idx}"] = ff_loss
-            scalar_outputs[f"ff_accuracy_layer_{idx}"] = ff_accuracy
-            scalar_outputs["Loss"] += ff_loss
+            if isinstance(layer, nn.Conv2d):
+                if self.opt.model.peer_normalization > 0:
+                    if idx==3 or idx==4:
+                        idx=idx-1
+                    elif idx>=6 and idx<=9:
+                        idx=idx-2
+                    peer_loss = self._calc_peer_normalization_loss(idx, z)
+                    scalar_outputs["Peer Normalization"] += peer_loss
+                    scalar_outputs["Loss"] += self.opt.model.peer_normalization * peer_loss
+                    
+                ff_loss, ff_accuracy = self._calc_ff_loss(z, posneg_labels)
+                scalar_outputs[f"loss_layer_{idx}"] = ff_loss
+                scalar_outputs[f"ff_accuracy_layer_{idx}"] = ff_accuracy
+                scalar_outputs["Loss"] += ff_loss
             z = z.detach()  # 特别注意: 把 z 送入下一层 layer 的 forward 之前, 必须 detach 掉 z 在上一层 layer 中的计算图.
 
             z = self._layer_norm(z)
@@ -175,7 +173,8 @@ class FF_model(torch.nn.Module):
                 # 收集从第2层 hidden layer 开始的 activity vector.
                 # 注意: 选取的都是归一化后的 activity vector.
                 #if idx >= 1:
-                input_classification_model.append(torch.reshape(z,(z.shape[0],-1)))
+                if isinstance(layer, nn.Conv2d):
+                    input_classification_model.append(torch.reshape(z,(z.shape[0],-1)))
 
         input_classification_model = torch.concat(input_classification_model, dim=-1)
 
