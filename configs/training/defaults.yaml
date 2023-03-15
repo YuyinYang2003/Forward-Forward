@@ -1,0 +1,11 @@
+epochs: 60
+
+learning_rate: 0.0003
+weight_decay: 3e-4
+momentum: 0.9
+
+downstream_learning_rate: 0.003
+downstream_weight_decay: 3e-3
+
+val_idx: 10  # -1: validate only once training has finished; n: validate every n epochs.
+final_test: True  # Set to true to evaluate performance on test-set.
