@@ -1,0 +1,16 @@
+program: main.py
+method: grid
+name: mnist - (embedding) sweep functionality test(5/10 epochs)
+metric:
+    goal: maximize
+    name: Val cls_acc
+
+parameters:
+  training.epochs:
+    values: [5, 10]
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - ${args_no_hyphens}
