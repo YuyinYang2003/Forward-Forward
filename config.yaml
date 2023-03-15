@@ -1,5 +1,6 @@
 seed: 42
 device: "cuda"  # cpu or cuda
+method: random
 
 input:
   path: datasets
@@ -7,25 +8,28 @@ input:
 
 
 model:
-  peer_normalization: 0.03
+  peer_normalization: 0.02
   momentum: 0.9  # Momentum to use for the running mean in peer normalization loss.
 
-  hidden_dim: 1000
-  num_layers: 3
+  #hidden_dim: 1000
+  #num_layers: 3
+  #num_layers: 10
+  num_layers: 4
 
 
 training:
-  epochs: 100
+  epochs: 60
 
-  learning_rate: 1e-3
+  learning_rate: 3e-4
   weight_decay: 3e-4
+
   momentum: 0.9
 
-  downstream_learning_rate: 1e-2
+  downstream_learning_rate: 3e-3
   downstream_weight_decay: 3e-3
 
   val_idx: -1  # -1: validate only once training has finished; n: validate every n epochs.
-  final_test: False  # Set to true to evaluate performance on test-set.
+  final_test: True  # Set to true to evaluate performance on test-set.
 
 
 hydra:
