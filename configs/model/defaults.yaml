@@ -1,0 +1,7 @@
+# 默认 model 配置: 适用于 MNIST.
+peer_normalization: 0.03  # 控制 peer_normalization_loss 的权重/系数
+momentum: 0.9  # Momentum to use for the running mean in peer normalization loss.
+
+input_dim: 784
+hidden_dim: 1000
+num_layers: 3

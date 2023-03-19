@@ -1,0 +1,5 @@
+path: datasets
+batch_size: 100
+dataset: cifar10
+num_classes: 10
+val_size: 5000

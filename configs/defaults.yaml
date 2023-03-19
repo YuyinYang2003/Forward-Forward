@@ -1,0 +1,68 @@
+# defaults.yaml 是已经被弃用的 config 文件, 目前已转移到与数据集同名的 config 文件中.
+defaults:
+  - input: cifar10
+  - model: ${input}
+  - training: ${input}
+  - hydra: defaults
+  - wandb: defaults
+  - _self_
+
+seed: 42
+device: "cuda"
+# 注意: 在 wandb run 之前, 一定确定下面的 Hyperparameters group 只有一块没被注释!
+
+'''
+# Hyperparameters for MNIST:
+input:
+  batch_size: 100
+
+model:
+  goodness_type: sum
+  theta: 2.0  # 当 goodness_type 为 sum 时, 不用管 theta.
+
+  peer_normalization: 0.0 # modif 2: 将 peer_norm 置为0, 观察效果.
+
+training:
+  # test_mode: compute_each_label
+  test_mode: one_pass_softmax
+
+  # 当 test_mode 为 compute_each_label 时, 
+  # 不用管 downstream 开头的参数; 
+  # 且此时, lr_schedule 只会影响 ff_layer 所用的 lr_schedule_func.
+  epochs: 100
+  learning_rate: 1e-3
+
+  downstream_learning_rate: 1e-2
+  downstream_weight_decay: 3e-3
+  lr_schedule: default
+
+  final_test: True
+'''
+
+
+# Hyperparameters for CIFAR10:
+input:
+  batch_size: 100
+
+model:
+  goodness_type: sum
+  theta: 2.0  # 当 goodness_type 为 sum 时, 不用管 theta.
+
+  peer_normalization: 0.0 # modif 2: 将 peer_norm 置为0, 观察效果.
+
+training:
+  # test_mode: compute_each_label
+  test_mode: one_pass_softmax
+
+  # 当 test_mode 为 compute_each_label 时, 
+  # 不用管 downstream 开头的参数; 
+  # 且此时, lr_schedule 只会影响 ff_layer 所用的 lr_schedule_func.
+  epochs: 200
+  learning_rate: 0.75e-4 # modif 1: 减少 lr, 缓解 dead relu
+
+  downstream_learning_rate: 0.75e-4
+  downstream_weight_decay: 3e-4 # modif 4: 把 cls_layer 的 weight_decay 设置成与 ff_layer 一样小, 先追求overfitting.
+  lr_schedule: mixed  # modif 3: ff_layer 与 cls_layer 采用不同的 lr_schedule.
+
+  final_test: True
+
