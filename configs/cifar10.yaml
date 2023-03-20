@@ -16,14 +16,14 @@ model:
   goodness_type: sum
   theta: 2.0  # 当 goodness_type 为 sum 时, 不用管 theta.
 
-  peer_normalization: 0.3 # modif 2: 将 peer_norm 置为0, 观察效果.
+  peer_normalization: 0.0 # modif dqr: 将 peer_norm 置为0, 观察效果.
 
 training:
-  #test_mode: compute_each_label
+  # test_mode: compute_each_label
   test_mode: one_pass_softmax
-  
+
   final_test: True
- 
+
   epochs: 100
   learning_rate: 1e-6 # modif 1: 减少 lr, 缓解 dead relu
   lr_boundary_points: [[20, 1e-6], 1e-7]

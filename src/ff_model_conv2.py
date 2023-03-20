@@ -23,9 +23,15 @@ class FF_model_conv2(torch.nn.Module):
         #modif 1
 
         # Initialize the model.
-        self.model = nn.ModuleList([nn.Conv2d(in_channels=3, out_channels=self.num_channels[0], kernel_size=self.receptions[0],stride=self.num_strides[0],padding=self.padding[0])])
+        self.model = nn.ModuleList(
+            [nn.Conv2d(in_channels=3, out_channels=self.num_channels[0], 
+                       kernel_size=self.receptions[0], stride=self.num_strides[0], padding=self.padding[0])]
+            )
         for i in range(1, len(self.num_channels)):
-            self.model.append(nn.Conv2d(self.num_channels[i-1], out_channels=self.num_channels[i], kernel_size=self.receptions[i],stride=self.num_strides[i],padding=self.padding[i]))
+            self.model.append(
+                nn.Conv2d(self.num_channels[i-1], out_channels=self.num_channels[i], 
+                          kernel_size=self.receptions[i],stride=self.num_strides[i],padding=self.padding[i])
+                )
             if i==1 or i==3:
                 self.model.append(nn.MaxPool2d(kernel_size=2))
         
@@ -35,7 +41,7 @@ class FF_model_conv2(torch.nn.Module):
         # Initialize peer normalization loss.
         self.running_means = [
             torch.zeros(self.num_channels[i]*(self.dim[i]**2), device=self.opt.device) + 0.5    #modif3
-            for i in range(self.opt.model.num_layers-2) #两个pooling层不计入
+            for i in range(self.opt.model.num_layers-2) # 两个 pooling 层不计入 running_means
         ]
 
 
@@ -43,7 +49,7 @@ class FF_model_conv2(torch.nn.Module):
         if self.opt.training.test_mode == "one_pass_softmax":
             channels_for_classification_loss = sum(
                 self.num_channels[-i]*(self.dim[-i]**2) for i in range(self.opt.model.num_layers-2)
-            )   # modif 4计入所有conv出来的结果
+            )   # modif4 计入所有 conv 出来的结果 (包括第一层卷积层)
             # 下游的线性分类器 并不被包括在 self.model 中, 而是单独列为 self.linear_classifier.
             self.linear_classifier = nn.Sequential(
                 nn.Linear(channels_for_classification_loss, 10, bias=False)
@@ -80,15 +86,16 @@ class FF_model_conv2(torch.nn.Module):
         # dim=-1 指最后一个 dim, 应该总归指同一个 sample 中的多个分量所在的维度.
         # 纠错: 为什么这里是 mean 而不是 sum?
         # 可能的原因是: 使得归一化后的 sum_of_squares 等于 z.shape[1], 而非简单地归一化为 1.
-        t=torch.reshape(z,(z.shape[0],-1))
-        s=z.shape
-        t=t/(torch.sqrt(torch.mean(t ** 2, dim=-1, keepdim=True)) + eps)
-        return torch.reshape(t,(s)) # modif 6
+        s = z.shape
+        t = torch.reshape(z,(z.shape[0],-1))
+        t = t / (torch.sqrt(torch.mean(t ** 2, dim=-1, keepdim=True)) + eps)
+        return torch.reshape(t,s) # modif 6
+        # modif dqr
 
     def _calc_peer_normalization_loss(self, idx, x):
         # Only calculate mean activity over positive samples.
         z=torch.reshape(x,(x.shape[0],-1))
-        mean_activity = torch.mean(z[:self.opt.input.batch_size], dim=0)    #modif7
+        mean_activity = torch.mean(z[:self.opt.input.batch_size], dim=0)    # modif7
 
         self.running_means[idx] = self.running_means[
             idx
@@ -101,7 +108,7 @@ class FF_model_conv2(torch.nn.Module):
 
     def _calc_ff_loss(self, x, labels):
         '''用 squared_sum 与 squared_mean 两种不同方式生成 logits.'''
-        z=torch.reshape(x,(x.shape[0],-1))  #modif8
+        z = torch.reshape(x,(x.shape[0],-1))  # modif8
         
         if self.opt.model.goodness_type == "sum":
             sum_of_squares = torch.sum(z ** 2, dim=-1)
@@ -141,10 +148,10 @@ class FF_model_conv2(torch.nn.Module):
         posneg_labels = torch.zeros(z.shape[0], device=self.opt.device)
         posneg_labels[: self.opt.input.batch_size] = 1
 
-        #z = z.reshape(z.shape[0], -1)
-        #卷积这里不用flatten
+        # z = z.reshape(z.shape[0], -1)
+        # modif: 卷积这里不用flatten
 
-        # 从下面开始 z 就是被 flatten 成为一个二维 tensor, 分为 batch 和 length 两个维度.
+        # 在卷积网络 forward 过程中, z 始终是一个 B*C*H*W 的四维 tensor.
         # z 在被送入第一层之前, 就已经被 normalize 了.
         z = self._layer_norm(z)
 
@@ -153,12 +160,13 @@ class FF_model_conv2(torch.nn.Module):
             z = self.act_fn.apply(z)
 
             # 可选项: 是否把 peer loss 这个正则因子加入最终的 Loss 中.
+            # modif
             if isinstance(layer, nn.Conv2d):
                 if self.opt.model.peer_normalization > 0:
                     if idx==3 or idx==4:
-                        idx=idx-1
+                        idx=idx-1   # 抵消 1 层 maxpool 
                     elif idx>=6 and idx<=9:
-                        idx=idx-2
+                        idx=idx-2   # 抵消 2 层 maxpool
                     peer_loss = self._calc_peer_normalization_loss(idx, z)
                     scalar_outputs["Peer Normalization"] += peer_loss
                     scalar_outputs["Loss"] += self.opt.model.peer_normalization * peer_loss
@@ -195,8 +203,8 @@ class FF_model_conv2(torch.nn.Module):
             }
 
         z = inputs["neutral_sample"]
-        #z = z.reshape(z.shape[0], -1)
-        #卷积层这里不用flatten
+        # z = z.reshape(z.shape[0], -1)
+        # modif: 卷积层这里不用flatten
         z = self._layer_norm(z)
 
         input_classification_model = []
@@ -209,8 +217,8 @@ class FF_model_conv2(torch.nn.Module):
 
                 # 收集从第2层 hidden layer 开始的 activity vector.
                 # 注意: 选取的都是归一化后的 activity vector.
-                #if idx >= 1:
-                #经过实验，卷积层第一层计入效果更好
+                # if idx >= 1:
+                # modif: 经过实验，卷积层第一层计入效果更好
                 if isinstance(layer, nn.Conv2d):
                     input_classification_model.append(torch.reshape(z,(z.shape[0],-1)))
 
@@ -247,11 +255,11 @@ class FF_model_conv2(torch.nn.Module):
 
         num_classes = self.opt.input.num_classes
         z = inputs["neutral_sample"]
-        #z = z.reshape(z.shape[0], -1)
-        #卷积层这里不需要flatten
+        # z = z.reshape(z.shape[0], -1)
+        # modif: 卷积层这里不需要flatten
 
         # 在 neutral_sample 的基础上生成 z_labeled, 节省显存.
-        # 后面循环中所用的 z 都是上面 z.reshape 生成的二维 tensor.
+        # 注意: 后面循环中, z 和 z_labeled 都是四维的 tensor. flatten 操作应该在 utils 函数中各自进行.
         goodness_per_label = []
         for label in range(num_classes):
             z_labeled = utils.overlay_label_on_z(num_classes, z, label)
@@ -262,8 +270,13 @@ class FF_model_conv2(torch.nn.Module):
                     z_labeled = layer(z_labeled)
                     z_labeled = self.act_fn.apply(z_labeled)
 
-                    #if idx >= 1:
-                    goodness_of_layers.append(torch.sum(torch.reshape(z_labeled,(z_labeled.shape[0],-1)) ** 2, dim=1))
+                    # modif dqr: 只有 卷积层 的 layer_goodness 才应该被计入,
+                    # pooling layer 没有参数, 也不需要计算其 layer_goodness.
+                    # if idx >= 1:
+                    if isinstance(layer, nn.Conv2d):
+                        goodness_of_layers.append(
+                            torch.sum(torch.reshape(z_labeled,(z_labeled.shape[0],-1)) ** 2, dim=1)
+                            )
 
                     z_labeled = self._layer_norm(z_labeled)
             goodness_per_label.append(sum(goodness_of_layers).unsqueeze(1))
