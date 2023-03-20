@@ -350,13 +350,14 @@ def log_results(result_dict, scalar_outputs, num_steps):
 
 
 def overlay_label_on_z(num_classes, z, label):
-    '''z 为 二维 tensor, label 为 0-9 之间的数字;
+    '''注意: 在卷积网络中, z 为四维 tensor: B*C*H*W;
     把 z 的每行前 10 列元素都替换成 label 所指示的那个标签.'''
-    z_labeled = z.clone()
+    z_labeled = z.clone().reshape(z.shape[0], -1)   # 若 z 本身就是二维, 该操作无影响.
 
+    # 下面 z_labeled 已经变成二维了.
     # 必须把 index tensor 放到 gpu 上, 否则它与 z_labeled 就不在同一设备上.
     index = torch.arange(num_classes).cuda()
     z_labeled.index_fill_(1, index, 0)
     z_labeled[:, label] = 1
 
-    return z_labeled
+    return z_labeled.reshape(z.shape)   # modif dqr: 返回的仍是一个四维 tensor.
