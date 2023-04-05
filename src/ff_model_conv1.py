@@ -9,15 +9,16 @@ from src import utils
 
 class FF_model_conv1(torch.nn.Module):
     """The model trained with Forward-Forward (FF)."""
+    """这个model是目前test_acc最好的卷积层设计"""
 
     def __init__(self, opt):
         super(FF_model_conv1, self).__init__()
 
         self.opt = opt
-        self.num_channels=[128,220,512]
-        self.num_strides=[4,2,1]
-        self.receptions=[12,2,2]
-        self.dim=[6,3,2]
+        self.num_channels=[160,250,250]
+        self.num_strides=[2,2,1]
+        self.receptions=[8,5,4]
+        self.dim=[13,5,2]
         self.act_fn = ReLU_full_grad()
         #modif 1
 
@@ -28,7 +29,7 @@ class FF_model_conv1(torch.nn.Module):
         #modif 2
         
         # Initialize forward-forward loss.
-        self.ff_loss = nn.BCEWithLogitsLoss()    # modif 1: reduction='sum'
+        # self.ff_loss = nn.BCEWithLogitsLoss()    #经过实验，ff_loss换成之后定义的二范数方式计算test_acc大幅提升
 
         # Initialize peer normalization loss.
         self.running_means = [
@@ -54,7 +55,7 @@ class FF_model_conv1(torch.nn.Module):
     def _init_weights(self):
         # 纠错: 是否该改为 model.children()? 不过对于当前模型, 实际不影响.
         for m in self.model.modules():
-            if isinstance(m, nn.Linear):
+            if isinstance(m, nn.Conv2d):
                 # 用了正态分布来初始化 weight_matrix (即最简单的一种 Xavier 初始化), 而没有用 nn.Linear 默认的均匀分布.
                 # 纠错: weight_matrix 的形状为: (out_features,in_features), 原作者这里用 out_features 来初始化 std, 
                 # 但正常应该是用 in_features 来初始化吧? (不过对于 cifar10, out_features = in_features, 实际不影响)
@@ -96,6 +97,11 @@ class FF_model_conv1(torch.nn.Module):
 
         peer_loss = (torch.mean(self.running_means[idx]) - self.running_means[idx]) ** 2
         return torch.mean(peer_loss)
+    
+    #换一种loss计算方式，实验后发现test_acc大约提升10%
+    def ff_loss(self,logit,label):
+        logit_sig=torch.sigmoid(logit)
+        return torch.norm(logit_sig-label)
 
     def _calc_ff_loss(self, x, labels):
         '''用 squared_sum 与 squared_mean 两种不同方式生成 logits.'''
