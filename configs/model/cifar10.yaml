@@ -3,7 +3,7 @@ momentum: 0.9  # Momentum to use for the running mean in peer normalization loss
 
 input_dim: 3072
 hidden_dim: 3072
-num_layers: 10
+num_layers: 10 #在跑3层卷积/mlp时要把这里换成3
 
 goodness_type: sum
 theta: 2.0  # 决定产生 ff_loss 的 logits 是 squared_sum 还是 squared_mean.
