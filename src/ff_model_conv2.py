@@ -9,7 +9,7 @@ from src import utils
 
 class FF_model_conv2(torch.nn.Module):
     """The model trained with Forward-Forward (FF)."""
-
+    """10层卷积网络结合ffa"""
     def __init__(self, opt):
         super(FF_model_conv2, self).__init__()
 
@@ -36,7 +36,7 @@ class FF_model_conv2(torch.nn.Module):
                 self.model.append(nn.MaxPool2d(kernel_size=2))
         
         # Initialize forward-forward loss.
-        self.ff_loss = nn.BCEWithLogitsLoss()    # modif 1: reduction='sum'
+        # self.ff_loss = nn.BCEWithLogitsLoss()    # 实验证明，ff_loss计算方式改为二范数test_acc会提高约10%
 
         # Initialize peer normalization loss.
         self.running_means = [
@@ -58,11 +58,16 @@ class FF_model_conv2(torch.nn.Module):
 
         # Initialize weights.
         self._init_weights()
-
+        
+    # 实验证明，ff_loss计算方式改为二范数test_acc会提高约10%
+    def ff_loss(self,logit,label):
+            logit_sig=torch.sigmoid(logit)
+            return torch.norm(logit_sig-label)
+        
     def _init_weights(self):
         # 纠错: 是否该改为 model.children()? 不过对于当前模型, 实际不影响.
         for m in self.model.modules():
-            if isinstance(m, nn.Linear):
+            if isinstance(m, nn.Conv2d):
                 # 用了正态分布来初始化 weight_matrix (即最简单的一种 Xavier 初始化), 而没有用 nn.Linear 默认的均匀分布.
                 # 纠错: weight_matrix 的形状为: (out_features,in_features), 原作者这里用 out_features 来初始化 std, 
                 # 但正常应该是用 in_features 来初始化吧? (不过对于 cifar10, out_features = in_features, 实际不影响)
