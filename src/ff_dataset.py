@@ -38,6 +38,9 @@ class FF_Dataset(torch.utils.data.Dataset):
         )
         pos_sample = sample.clone()
         pos_sample[0, 0, : self.num_classes] = one_hot_label
+        #pos_sample[1, 0, : self.num_classes] = one_hot_label
+        #pos_sample[2, 0, : self.num_classes] = one_hot_label
+        #在验证layer_acc0.5假设3时可以把这里恢复不被注释
         return pos_sample
 
     def _get_neg_sample(self, sample, class_label):
@@ -50,10 +53,16 @@ class FF_Dataset(torch.utils.data.Dataset):
         )
         neg_sample = sample.clone()
         neg_sample[0, 0, : self.num_classes] = one_hot_label
+        #neg_sample[1, 0, : self.num_classes] = one_hot_label
+        #neg_sample[2, 0, : self.num_classes] = one_hot_label
+        #在验证layer_acc0.5假设3时可以把这里恢复不被注释
         return neg_sample
 
     def _get_neutral_sample(self, z):
         z[0, 0, : self.num_classes] = self.uniform_label
+        #z[1, 0, : self.num_classes] = self.uniform_label
+        #z[2, 0, : self.num_classes] = self.uniform_label
+        #在验证layer_acc0.5假设3时可以把这里恢复不被注释
         return z
 
     def _generate_sample(self, index):
