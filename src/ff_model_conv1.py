@@ -9,7 +9,7 @@ from src import utils
 
 class FF_model_conv1(torch.nn.Module):
     """The model trained with Forward-Forward (FF)."""
-    """这个model是目前test_acc最好的卷积层设计"""
+    """3层卷积结合ffa"""
 
     def __init__(self, opt):
         super(FF_model_conv1, self).__init__()
